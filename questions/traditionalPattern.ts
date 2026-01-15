@@ -38,7 +38,4 @@ function MyExampleComponent() {
     return(
         <p>I got the message: {message} </p>
     );
-
-
-
 }
