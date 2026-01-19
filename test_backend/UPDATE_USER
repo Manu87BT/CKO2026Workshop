@@ -1,0 +1,161 @@
+#!/bin/bash
+# update-user.sh
+
+API_URL="http://localhost:8000"
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+safe_exit() {
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        return $1
+    else
+        exit $1
+    fi
+}
+
+show_help() {
+    echo -e "${BLUE}✏️  Script to update users${NC}"
+    echo ""
+    echo "Usage:"
+    echo "  $0 <user_id> [--name <name>] [--email <email>] [--role <role>]"
+    echo ""
+    echo "Parameters:"
+    echo "  user_id  - ID of the user to update (required)"
+    echo "  --name   - New name (optional)"
+    echo "  --email  - New email (optional)"
+    echo "  --role   - New role (optional)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 1 --name \"Alice Updated\""
+    echo "  $0 2 --email \"newemail@example.com\""
+    echo "  $0 3 --name \"Bob Smith\" --role \"Senior Developer\""
+    echo ""
+}
+
+# Check for help
+if [[ "$1" == "-h" ]] || [[ "$1" == "--help" ]]; then
+    show_help
+    safe_exit 0
+fi
+
+# Check ID
+if [ $# -eq 0 ]; then
+    echo -e "${RED}❌ You must provide the user ID${NC}"
+    echo ""
+    show_help
+    safe_exit 1
+fi
+
+USER_ID=$1
+shift
+
+# Validate ID
+if ! [[ "$USER_ID" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}❌ The ID must be a number${NC}"
+    safe_exit 1
+fi
+
+# Parse optional parameters
+NAME=""
+EMAIL=""
+ROLE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --name)
+            NAME="$2"
+            shift 2
+            ;;
+        --email)
+            EMAIL="$2"
+            shift 2
+            ;;
+        --role)
+            ROLE="$2"
+            shift 2
+            ;;
+        *)
+            echo -e "${RED}❌ Unknown parameter: $1${NC}"
+            show_help
+            safe_exit 1
+            ;;
+    esac
+done
+
+# Verify that at least one field is being updated
+if [ -z "$NAME" ] && [ -z "$EMAIL" ] && [ -z "$ROLE" ]; then
+    echo -e "${RED}❌ You must provide at least one field to update${NC}"
+    echo ""
+    show_help
+    safe_exit 1
+fi
+
+# Build JSON dynamically
+JSON_PAYLOAD="{"
+FIRST=true
+
+if [ -n "$NAME" ]; then
+    JSON_PAYLOAD+="\"name\": \"$NAME\""
+    FIRST=false
+fi
+
+if [ -n "$EMAIL" ]; then
+    [ "$FIRST" = false ] && JSON_PAYLOAD+=", "
+    JSON_PAYLOAD+="\"email\": \"$EMAIL\""
+    FIRST=false
+fi
+
+if [ -n "$ROLE" ]; then
+    [ "$FIRST" = false ] && JSON_PAYLOAD+=", "
+    JSON_PAYLOAD+="\"role\": \"$ROLE\""
+fi
+
+JSON_PAYLOAD+="}"
+
+# Show what will be updated
+echo ""
+echo -e "${YELLOW}✏️  Updating user ID $USER_ID...${NC}"
+[ -n "$NAME" ] && echo "  New name: $NAME"
+[ -n "$EMAIL" ] && echo "  New email: $EMAIL"
+[ -n "$ROLE" ] && echo "  New role:  $ROLE"
+echo ""
+
+# Make request
+RESPONSE=$(curl -s -w "\n%{http_code}" -X PATCH ${API_URL}/users/${USER_ID} \
+  -H "Content-Type: application/json" \
+  -d "$JSON_PAYLOAD")
+
+HTTP_BODY=$(echo "$RESPONSE" | head -n -1)
+HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+
+# Process response
+if [ "$HTTP_CODE" -eq 200 ]; then
+    echo -e "${GREEN}✅ User updated successfully${NC}"
+    echo ""
+    
+    if command -v jq &> /dev/null; then
+        echo "Updated user:"
+        echo "$HTTP_BODY" | jq .
+    else
+        echo "$HTTP_BODY"
+    fi
+    
+    safe_exit 0
+else
+    echo -e "${RED}❌ Error updating user (HTTP $HTTP_CODE)${NC}"
+    
+    if [ "$HTTP_CODE" -eq 404 ]; then
+        echo "User not found"
+    elif [ "$HTTP_CODE" -eq 400 ]; then
+        if command -v jq &> /dev/null; then
+            ERROR_MSG=$(echo "$HTTP_BODY" | jq -r '.detail // "Unknown error"')
+            echo "Detail: $ERROR_MSG"
+        fi
+    fi
+    
+    safe_exit 1
+fi

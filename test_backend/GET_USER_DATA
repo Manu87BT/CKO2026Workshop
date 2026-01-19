@@ -1,0 +1,207 @@
+#!/bin/bash
+# get-user.sh
+# Script to get users from the workshop API
+# Without ID: shows all users
+# With ID: shows a specific user
+
+# Configuration
+API_URL="http://localhost:8000"
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Function to exit safely
+safe_exit() {
+    local exit_code=$1
+    
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        return $exit_code
+    else
+        exit $exit_code
+    fi
+}
+
+# Help function
+show_help() {
+    echo -e "${BLUE}👥 Script to get users${NC}"
+    echo ""
+    echo "Usage:"
+    echo "  $0           # List all users"
+    echo "  $0 <user_id> # Get a specific user"
+    echo ""
+    echo "Examples:"
+    echo "  $0           # Show all users"
+    echo "  $0 1         # Show only user with ID 1"
+    echo "  $0 5         # Show only user with ID 5"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help   # Show this help"
+    echo "  -j, --json   # Show unformatted JSON (useful for scripts)"
+    echo ""
+}
+
+# Variables
+JSON_RAW=false
+USER_ID=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            safe_exit 0
+            ;;
+        -j|--json)
+            JSON_RAW=true
+            shift
+            ;;
+        *)
+            if [ -z "$USER_ID" ]; then
+                USER_ID="$1"
+            else
+                echo -e "${RED}❌ Too many arguments${NC}"
+                echo ""
+                show_help
+                safe_exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# ============================================
+# CASE 1: NO ID - List all users
+# ============================================
+
+if [ -z "$USER_ID" ]; then
+    
+    # Make request
+    RESPONSE=$(curl -s -w "\n---HTTPCODE---%{http_code}" ${API_URL}/users)
+    
+    # Separate body and status code
+    HTTP_BODY=$(echo "$RESPONSE" | sed 's/---HTTPCODE---[0-9]*$//')
+    HTTP_CODE=$(echo "$RESPONSE" | grep -o '[0-9]*$')
+    
+    # Verify response
+    if [ "$HTTP_CODE" -ne 200 ]; then
+        echo -e "${RED}❌ Error getting users (HTTP $HTTP_CODE)${NC}"
+        echo "Is the server running on ${API_URL}?"
+        safe_exit 1
+    fi
+    
+    # If raw JSON was requested, show it and exit
+    if [ "$JSON_RAW" = true ]; then
+        echo "$HTTP_BODY"
+        safe_exit 0
+    fi
+    
+    # Count users
+    if command -v jq &> /dev/null; then
+        USER_COUNT=$(echo "$HTTP_BODY" | jq 'length')
+    else
+        USER_COUNT="?"
+    fi
+    
+    # Show header
+    echo -e "${GREEN}👥 User list${NC} (Total: $USER_COUNT)"
+    echo ""
+    
+    # Show formatted users
+    if command -v jq &> /dev/null; then
+        # With jq - pretty format
+        echo "$HTTP_BODY" | jq -r '
+            ["ID", "NAME", "EMAIL", "ROLE"],
+            ["--", "----", "-----", "----"],
+            (. [] | [.id, .name, .email, .role])
+            | @tsv
+        ' | column -t -s $'\t'
+        
+        echo ""
+        echo -e "${CYAN}💡 Tip: Use '$0 <ID>' to see details of a specific user${NC}"
+    else
+        # Without jq - simple format
+        echo -e "${YELLOW}⚠️  jq is not installed. Showing simple format. ${NC}"
+        echo ""
+        echo "$HTTP_BODY" | sed 's/},/},\n/g'
+    fi
+    
+    safe_exit 0
+fi
+
+# ============================================
+# CASE 2: WITH ID - Get specific user
+# ============================================
+
+# Validate that ID is a number
+if ! [[ "$USER_ID" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}❌ ID must be a number${NC}"
+    echo ""
+    echo "Usage:  $0 [user_id]"
+    echo "Example: $0 1"
+    safe_exit 1
+fi
+
+# Make request
+RESPONSE=$(curl -s -w "\n---HTTPCODE---%{http_code}" ${API_URL}/users/${USER_ID})
+
+# Separate body and status code
+HTTP_BODY=$(echo "$RESPONSE" | sed 's/---HTTPCODE---[0-9]*$//')
+HTTP_CODE=$(echo "$RESPONSE" | grep -o '[0-9]*$')
+
+# Verify response
+if [ "$HTTP_CODE" -eq 404 ]; then
+    echo -e "${RED}❌ User not found (ID: $USER_ID)${NC}"
+    echo ""
+    echo "Available users:"
+    
+    # List available users
+    if command -v jq &> /dev/null; then
+        curl -s ${API_URL}/users | jq -r '.[] | "  ID: \(.id) - \(.name)"'
+    else
+        echo "  (run '$0' to see the complete list)"
+    fi
+    
+    safe_exit 1
+    
+elif [ "$HTTP_CODE" -ne 200 ]; then
+    echo -e "${RED}❌ Error getting user (HTTP $HTTP_CODE)${NC}"
+    echo "Is the server running on ${API_URL}?"
+    safe_exit 1
+fi
+
+if [ "$HTTP_CODE" -eq 200 ]; then
+    
+    # If raw JSON was requested, show it and exit
+    if [ "$JSON_RAW" = true ]; then
+        echo "$HTTP_BODY"
+        safe_exit 0
+    fi
+
+    # Show formatted user
+    if command -v jq &> /dev/null; then
+            # Extract data
+            NAME=$(echo "$HTTP_BODY" | jq -r '.name')
+            EMAIL=$(echo "$HTTP_BODY" | jq -r '.email')
+            ROLE=$(echo "$HTTP_BODY" | jq -r '.role')
+            
+            # Show with pretty format
+            echo -e "${GREEN}👤 User ID: $USER_ID${NC}"
+            echo "---------"
+            echo "Name:  $NAME"
+            echo "Email: $EMAIL"
+            echo "Role:  $ROLE"
+            echo "---------"
+        else
+            # Without jq - simple format
+            echo -e "${YELLOW}⚠️  jq is not installed. Showing simple format.${NC}"
+            echo ""
+            echo "$HTTP_BODY"
+        fi
+        
+        safe_exit 0
+fi

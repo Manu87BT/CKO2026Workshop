@@ -1,0 +1,73 @@
+#!/bin/bash
+# set-latency.sh
+
+# Configuration
+API_URL="http://localhost:8000"
+MODE=${1:-NO_LATENCY}
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+# Function to exit safely
+# If executed with source, use return
+# If executed directly, use exit
+safe_exit() {
+    local exit_code=$1
+    
+    # Detect if executed with source
+    if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+        # Executed with source, use return
+        return $exit_code
+    else
+        # Executed directly, use exit
+        exit $exit_code
+    fi
+}
+
+# Validate mode
+VALID_MODES=("NO_LATENCY" "LOW_LATENCY" "MEDIUM_LATENCY" "HIGH_LATENCY")
+
+if [[ ! " ${VALID_MODES[@]} " =~ " ${MODE} " ]]; then
+    echo -e "${RED}❌ Invalid mode: ${MODE}${NC}"
+    echo ""
+    echo "Valid modes:"
+    echo "  - NO_LATENCY      (0ms read / 0ms write)"
+    echo "  - LOW_LATENCY     (100ms read / 150ms write)"
+    echo "  - MEDIUM_LATENCY  (250ms read / 400ms write)"
+    echo "  - HIGH_LATENCY    (1000ms read / 3000ms write)"
+    echo ""
+    echo "Usage: $0 [MODE]"
+    echo "Example: $0 MEDIUM_LATENCY"
+    safe_exit 1  # ← Use safe_exit instead of exit
+fi
+
+# Show what will be done
+echo -e "${YELLOW}🎛️  Changing latency to: ${MODE}${NC}"
+
+# Make the request
+RESPONSE=$(curl -s -X POST ${API_URL}/latency \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\": \"$MODE\"}")
+
+# Check if it worked
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✅ Latency changed successfully${NC}"
+    echo ""
+    
+    # Extract and show response (requires jq)
+    if command -v jq &> /dev/null; then
+        echo "Current state:"
+        echo "$RESPONSE" | jq . 
+    else
+        echo "Response:"
+        echo "$RESPONSE"
+    fi
+    safe_exit 0  # ← Success
+else
+    echo -e "${RED}❌ Error changing latency${NC}"
+    echo "Is the server running at ${API_URL}?"
+    safe_exit 1  # ← Error
+fi
