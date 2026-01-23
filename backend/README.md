@@ -55,4 +55,4 @@ POST /latency/reset
 
 ## Online documentation
 
-The online server documentation is available at `http://localhost:8000`
+The online server API documentation is available at `http://localhost:8000/docs`
