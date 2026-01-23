@@ -1,7 +1,11 @@
 #!/bin/bash
 # delete-user.sh
 
-API_URL="http://localhost:8000"
+# Local URL of the API
+#API_URL="http://localhost:8000"
+
+# Remote URL of the API for the workshop
+API_URL="http://pers-grhino001.sjcvirt.rti.com:8000"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

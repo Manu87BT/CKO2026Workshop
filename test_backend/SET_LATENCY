@@ -2,7 +2,11 @@
 # set-latency.sh
 
 # Configuration
-API_URL="http://localhost:8000"
+# Local URL of the API
+#API_URL="http://localhost:8000"
+
+# Remote URL of the API for the workshop
+API_URL="http://pers-grhino001.sjcvirt.rti.com:8000"
 MODE=${1:-NO_LATENCY}
 
 # Colors for output

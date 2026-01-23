@@ -5,7 +5,12 @@
 # With ID: shows a specific user
 
 # Configuration
-API_URL="http://localhost:8000"
+
+# Local URL of the API
+#API_URL="http://localhost:8000"
+
+# Remote URL of the API for the workshop
+API_URL="http://pers-grhino001.sjcvirt.rti.com:8000"
 
 # Colors for output
 GREEN='\033[0;32m'
