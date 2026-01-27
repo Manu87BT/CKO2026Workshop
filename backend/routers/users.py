@@ -94,10 +94,12 @@ async def delete_user(user_id: int, db: Session = Depends(get_db)):
     - **Error 404** if the user does not exist
     """
 
-    # TESTING CODE: Trigger a 404 error
-    """
-    raise HTTPException(status_code=404, detail="Trigger 404 error for testing")
-    """
+    # TESTING CODE: Trigger a 404 error if you try to delete user id 1
+    # (you are not allowed to delete DaBoss)
+    if user_id == 1:
+        await delay_delete()
+        raise HTTPException(status_code=404, detail="Trigger 404 error for testing")
+    
 
 
     await delay_delete()
